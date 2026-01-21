@@ -257,17 +257,48 @@ export default function SettingsPage() {
                                         </div>
                                     </div>
                                     <div className="flex-1">
-                                        <Label htmlFor="avatarUrl">Profile Picture URL</Label>
+                                        <Label htmlFor="avatarUpload">Profile Picture</Label>
                                         <Input
-                                            id="avatarUrl"
-                                            type="url"
-                                            placeholder="https://example.com/avatar.jpg"
-                                            value={avatarUrl}
-                                            onChange={(e) => setAvatarUrl(e.target.value)}
+                                            id="avatarUpload"
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+
+                                                try {
+                                                    setIsSaving(true);
+                                                    setSuccess('');
+                                                    setError('');
+
+                                                    // Use the supabase client directly if available, or upload via API
+                                                    // For now, let's assume we need to add a specialized upload logic
+                                                    // But simplified: we will use a FormData upload to a new API endpoint we will create
+
+                                                    const formData = new FormData();
+                                                    formData.append('file', file);
+
+                                                    const res = await fetch('/api/user/avatar', {
+                                                        method: 'POST',
+                                                        body: formData,
+                                                    });
+
+                                                    if (!res.ok) throw new Error('Failed to upload image');
+
+                                                    const data = await res.json();
+                                                    setAvatarUrl(data.url);
+                                                    setSuccess('Image uploaded! Click Save internally to persist if needed, or it auto-saves.');
+                                                } catch (err) {
+                                                    setError('Failed to upload image');
+                                                    console.error(err);
+                                                } finally {
+                                                    setIsSaving(false);
+                                                }
+                                            }}
                                             className="mt-1"
                                         />
                                         <p className="mt-1 text-xs text-muted-foreground">
-                                            Enter a URL to an image. Try using an image hosting service.
+                                            Upload a PNG or JPG key image. Max 2MB.
                                         </p>
                                     </div>
                                 </div>

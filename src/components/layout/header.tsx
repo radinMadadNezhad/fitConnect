@@ -37,7 +37,7 @@ import { useAuth } from '@/contexts/auth-context';
 const navigation = [
     { name: 'Home', href: '/', icon: Home },
     { name: 'Browse Coaches', href: '/coaches', icon: Users },
-    { name: 'My Bookings', href: '/dashboard', icon: Calendar },
+    { name: 'My Bookings', href: '/dashboard/client', icon: Calendar },
     { name: 'Messages', href: '/messages', icon: MessageSquare, badge: 3 },
 ];
 
@@ -45,7 +45,7 @@ const coachNavigation = [
     { name: 'Dashboard', href: '/dashboard/coach', icon: LayoutDashboard },
     { name: 'My Bookings', href: '/dashboard/coach/bookings', icon: Calendar },
     { name: 'Messages', href: '/messages', icon: MessageSquare, badge: 3 },
-    { name: 'Settings', href: '/dashboard/coach/settings', icon: Settings },
+    { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
 export function Header() {

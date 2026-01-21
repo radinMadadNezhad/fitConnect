@@ -26,7 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Header } from '@/components/layout';
 import { coaches, reviews } from '@/lib/mock-data';
-import { cn } from '@/lib/utils';
+import { cn, isDemoMode } from '@/lib/utils';
 
 interface CoachProfilePageProps {
     params: Promise<{ id: string }>;
@@ -34,7 +34,7 @@ interface CoachProfilePageProps {
 
 export default function CoachProfilePage({ params }: CoachProfilePageProps) {
     const { id } = use(params);
-    const coach = coaches.find((c) => c.id === id);
+    const coach = isDemoMode() ? coaches.find((c) => c.id === id) : undefined;
 
     if (!coach) {
         return (
@@ -53,7 +53,7 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
         );
     }
 
-    const coachReviews = reviews.filter((r) => r.coachId === coach.id);
+    const coachReviews = isDemoMode() ? reviews.filter((r) => r.coachId === coach.id) : [];
     const ratingDistribution = [5, 4, 3, 2, 1].map((rating) => ({
         rating,
         count: coachReviews.filter((r) => Math.floor(r.rating) === rating).length,

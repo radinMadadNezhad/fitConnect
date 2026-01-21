@@ -96,8 +96,19 @@ export async function createPaymentIntent(params: {
     bookingId: string;
     clientEmail: string;
     description: string;
+    applicationFeeCents?: number;
 }) {
-    const { platformFeeCents, payoutCents } = calculateFees(params.amountCents);
+    let platformFeeCents: number;
+    let payoutCents: number;
+
+    if (params.applicationFeeCents !== undefined) {
+        platformFeeCents = params.applicationFeeCents;
+        payoutCents = params.amountCents - platformFeeCents;
+    } else {
+        const fees = calculateFees(params.amountCents);
+        platformFeeCents = fees.platformFeeCents;
+        payoutCents = fees.payoutCents;
+    }
 
     const paymentIntent = await stripe.paymentIntents.create({
         amount: params.amountCents,

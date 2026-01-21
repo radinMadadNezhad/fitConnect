@@ -23,6 +23,7 @@ import { Card } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { coaches } from '@/lib/mock-data';
 import { Header } from '@/components/layout';
+import { isDemoMode } from '@/lib/utils';
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 20 },
@@ -38,7 +39,7 @@ const stagger = {
 };
 
 export default function LandingPage() {
-  const featuredCoaches = coaches.slice(0, 6);
+  const featuredCoaches = isDemoMode() ? coaches.slice(0, 6) : [];
 
   return (
     <div className="min-h-screen bg-background">

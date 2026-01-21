@@ -6,22 +6,19 @@ import {
     Calendar,
     DollarSign,
     Star,
-    Users,
     TrendingUp,
-    Clock,
     Plus,
     Settings,
     Camera,
-    Edit,
     MoreVertical,
-    ChevronRight
+    ChevronRight,
+    Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -30,32 +27,61 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Header } from '@/components/layout';
 import { KPICard } from '@/components/common';
-import { coaches, bookings, reviews } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
-
-// Simulate coach view - use first coach's data
-const currentCoach = coaches[0];
-const coachBookings = bookings.filter((b) => b.coachId === currentCoach.id);
-const coachReviews = reviews.filter((r) => r.coachId === currentCoach.id);
+import { useAuth } from '@/contexts/auth-context';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function CoachDashboardPage() {
-    const upcomingBookings = coachBookings.filter((b) => b.status === 'upcoming');
-    const completedBookings = coachBookings.filter((b) => b.status === 'completed');
+    const { user, isLoading: authLoading } = useAuth();
+    const router = useRouter();
+    const [coachBookings, setCoachBookings] = useState<any[]>([]);
+    const [coachId, setCoachId] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const totalEarnings = completedBookings.reduce((sum, b) => sum + b.payoutAmount, 0);
-    const pendingEarnings = upcomingBookings.reduce((sum, b) => sum + b.payoutAmount, 0);
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                router.push('/login');
+                return;
+            }
+            if (user.role !== 'coach') {
+                router.push('/dashboard'); // Will redirect to client dashboard
+                return;
+            }
+        }
+    }, [user, authLoading, router]);
 
-    // Profile completion simulation
-    const profileCompletion = 85;
-    const completionItems = [
-        { label: 'Profile photo', complete: true },
-        { label: 'Bio & tagline', complete: true },
-        { label: 'Certifications', complete: true },
-        { label: 'Packages', complete: true },
-        { label: 'Gallery photos', complete: currentCoach.gallery.length >= 4 },
-        { label: 'Availability', complete: true },
-        { label: 'Bank account', complete: false },
-    ];
+    useEffect(() => {
+        if (authLoading || !user || user.role !== 'coach') return;
+
+        async function fetchCoachData() {
+            try {
+                // Fetch bookings
+                const bookingsRes = await fetch('/api/bookings');
+                // Note: The /api/bookings endpoint needs to support filtering by coach or return all relevant bookings
+                // For now assuming it returns bookings for the current user (if they are a coach)
+                if (bookingsRes.ok) {
+                    const data = await bookingsRes.json();
+                    setCoachBookings(data.bookings || []);
+                }
+
+                // Fetch Profile for Coach ID
+                const profileRes = await fetch('/api/user/profile');
+                if (profileRes.ok) {
+                    const data = await profileRes.json();
+                    if (data.coachProfile?.id) {
+                        setCoachId(data.coachProfile.id);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load dashboard data', error);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        fetchCoachData();
+    }, [authLoading, user]);
 
     const formatDate = (datetime: string) => {
         const date = new Date(datetime);
@@ -74,6 +100,35 @@ export default function CoachDashboardPage() {
         });
     };
 
+    // Derived state
+    const upcomingBookings = coachBookings.filter((b) => b.status === 'upcoming' || b.status === 'PENDING_PAYMENT' || b.status === 'CONFIRMED');
+    const completedBookings = coachBookings.filter((b) => b.status === 'completed' || b.status === 'COMPLETED');
+
+    // Simple calculation for MVP
+    const totalEarnings = completedBookings.reduce((sum, b) => sum + (b.payoutCents || 0) / 100, 0);
+    const pendingEarnings = upcomingBookings.reduce((sum, b) => sum + (b.payoutCents || 0) / 100, 0);
+
+    // Mock profile completion for now until we also fetch profile
+    const profileCompletion = 85;
+    const completionItems = [
+        { label: 'Profile photo', complete: true },
+        { label: 'Bio & tagline', complete: true },
+        { label: 'Certifications', complete: true },
+        { label: 'Gallery photos', complete: true },
+        { label: 'Bank account', complete: false },
+    ];
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-background">
+                <Header />
+                <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-background">
             <Header />
@@ -88,13 +143,13 @@ export default function CoachDashboardPage() {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Button asChild variant="outline" className="rounded-xl">
-                            <Link href={`/coaches/${currentCoach.id}`}>
+                        <Button asChild variant="outline" className="rounded-xl" disabled={!coachId}>
+                            <Link href={coachId ? `/booking/${coachId}` : '/coaches'}>
                                 View Public Profile
                             </Link>
                         </Button>
                         <Button asChild className="rounded-xl">
-                            <Link href="/dashboard/coach/settings">
+                            <Link href="/dashboard/settings">
                                 <Settings className="mr-2 h-4 w-4" />
                                 Settings
                             </Link>
@@ -107,7 +162,7 @@ export default function CoachDashboardPage() {
                     <KPICard
                         title="Total Earnings"
                         value={`$${totalEarnings.toFixed(0)}`}
-                        change="+12% from last month"
+                        change="Lifetime"
                         changeType="positive"
                         icon={DollarSign}
                         iconColor="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
@@ -115,26 +170,26 @@ export default function CoachDashboardPage() {
                     <KPICard
                         title="Pending Payout"
                         value={`$${pendingEarnings.toFixed(0)}`}
-                        change="Next payout in 3 days"
+                        change="Upcoming sessions"
                         changeType="neutral"
                         icon={TrendingUp}
                         iconColor="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
                     />
                     <KPICard
                         title="Total Sessions"
-                        value={currentCoach.sessionsCompleted}
-                        change="+8 this week"
+                        value={completedBookings.length}
+                        change="Completed"
                         changeType="positive"
                         icon={Calendar}
                         iconColor="bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
                     />
                     <KPICard
                         title="Average Rating"
-                        value={currentCoach.rating}
-                        change={`${currentCoach.reviewCount} reviews`}
+                        value={5.0}
+                        change={`0 reviews`}
                         changeType="neutral"
                         icon={Star}
-                        iconColor="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+                        iconColor="bg-amber-100 text-amber-400"
                     />
                 </div>
 
@@ -157,18 +212,18 @@ export default function CoachDashboardPage() {
                                     upcomingBookings.map((booking) => (
                                         <div key={booking.id} className="flex items-center gap-4 p-4">
                                             <Avatar className="h-12 w-12">
-                                                <AvatarImage src={`https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face`} />
-                                                <AvatarFallback>{booking.clientName.charAt(0)}</AvatarFallback>
+                                                <AvatarImage src={booking.client?.avatar || undefined} />
+                                                <AvatarFallback>{booking.client?.displayName?.charAt(0) || 'C'}</AvatarFallback>
                                             </Avatar>
                                             <div className="min-w-0 flex-1">
-                                                <p className="font-medium">{booking.clientName}</p>
-                                                <p className="text-sm text-muted-foreground">{booking.packageTitle}</p>
+                                                <p className="font-medium">{booking.client?.displayName || 'Client'}</p>
+                                                <p className="text-sm text-muted-foreground">{booking.package?.title}</p>
                                             </div>
                                             <div className="text-right">
-                                                <p className="font-medium">{formatDate(booking.datetime)}</p>
-                                                <p className="text-sm text-muted-foreground">{formatTime(booking.datetime)}</p>
+                                                <p className="font-medium">{formatDate(booking.startTime || booking.datetime)}</p>
+                                                <p className="text-sm text-muted-foreground">{formatTime(booking.startTime || booking.datetime)}</p>
                                             </div>
-                                            <Badge variant="outline">${booking.payoutAmount}</Badge>
+                                            <Badge variant="outline">${(booking.payoutCents || 0) / 100}</Badge>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" size="icon">
@@ -196,29 +251,16 @@ export default function CoachDashboardPage() {
                         <Card className="rounded-2xl shadow-premium">
                             <div className="flex items-center justify-between border-b p-6">
                                 <h2 className="text-xl font-semibold">Your Packages</h2>
-                                <Button size="sm" className="rounded-xl">
-                                    <Plus className="mr-1 h-4 w-4" />
-                                    Add Package
+                                <Button asChild size="sm" className="rounded-xl">
+                                    <Link href="/dashboard/coach/packages/new">
+                                        <Plus className="mr-1 h-4 w-4" />
+                                        Add Package
+                                    </Link>
                                 </Button>
                             </div>
-                            <div className="divide-y">
-                                {currentCoach.packages.map((pkg) => (
-                                    <div key={pkg.id} className="flex items-center gap-4 p-4">
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                                            <Clock className="h-6 w-6 text-primary" />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="font-medium">{pkg.title}</p>
-                                            <p className="text-sm text-muted-foreground">
-                                                {pkg.duration} min • {pkg.type}
-                                            </p>
-                                        </div>
-                                        <p className="text-lg font-bold text-primary">${pkg.price}</p>
-                                        <Button variant="ghost" size="icon">
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                ))}
+                            <div className="p-8 text-center text-muted-foreground">
+                                <p>Manage your coaching packages here.</p>
+                                {/* Future: Map real packages here */}
                             </div>
                         </Card>
 
@@ -228,43 +270,11 @@ export default function CoachDashboardPage() {
                                 <h2 className="text-xl font-semibold">Recent Reviews</h2>
                                 <div className="flex items-center gap-2">
                                     <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
-                                    <span className="font-bold">{currentCoach.rating}</span>
-                                    <span className="text-sm text-muted-foreground">
-                                        ({currentCoach.reviewCount} reviews)
-                                    </span>
+                                    <span className="font-bold">5.0</span>
                                 </div>
                             </div>
-                            <div className="divide-y">
-                                {coachReviews.slice(0, 3).map((review) => (
-                                    <div key={review.id} className="p-4">
-                                        <div className="flex items-start gap-3">
-                                            <Avatar className="h-10 w-10">
-                                                <AvatarImage src={review.clientAvatar} />
-                                                <AvatarFallback>{review.clientName.charAt(0)}</AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex-1">
-                                                <div className="flex items-center justify-between">
-                                                    <p className="font-medium">{review.clientName}</p>
-                                                    <span className="text-sm text-muted-foreground">{review.date}</span>
-                                                </div>
-                                                <div className="mt-1 flex">
-                                                    {[1, 2, 3, 4, 5].map((star) => (
-                                                        <Star
-                                                            key={star}
-                                                            className={cn(
-                                                                'h-4 w-4',
-                                                                star <= review.rating
-                                                                    ? 'fill-amber-400 text-amber-400'
-                                                                    : 'text-muted-foreground/30'
-                                                            )}
-                                                        />
-                                                    ))}
-                                                </div>
-                                                <p className="mt-2 text-sm text-muted-foreground">{review.comment}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                            <div className="p-8 text-center text-muted-foreground">
+                                No reviews yet.
                             </div>
                         </Card>
                     </div>
@@ -311,16 +321,7 @@ export default function CoachDashboardPage() {
                             </div>
                             <div className="p-4">
                                 <div className="grid grid-cols-3 gap-2">
-                                    {currentCoach.gallery.map((image, index) => (
-                                        <div key={index} className="relative aspect-square overflow-hidden rounded-lg">
-                                            <Image
-                                                src={image}
-                                                alt={`Gallery ${index + 1}`}
-                                                fill
-                                                className="object-cover"
-                                            />
-                                        </div>
-                                    ))}
+                                    {/* Mock Empty State for now */}
                                     <button className="flex aspect-square items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 text-muted-foreground transition-colors hover:border-primary hover:text-primary">
                                         <Camera className="h-6 w-6" />
                                     </button>
@@ -334,19 +335,20 @@ export default function CoachDashboardPage() {
                                 <h3 className="font-semibold">This Week</h3>
                                 <div className="mt-4 grid grid-cols-2 gap-4">
                                     <div>
-                                        <p className="text-3xl font-bold">5</p>
+                                        <p className="text-3xl font-bold">{completedBookings.length}</p>
                                         <p className="text-sm text-primary-foreground/80">Sessions</p>
                                     </div>
                                     <div>
-                                        <p className="text-3xl font-bold">$420</p>
+                                        <p className="text-3xl font-bold">${totalEarnings}</p>
                                         <p className="text-sm text-primary-foreground/80">Earned</p>
                                     </div>
+                                    {/* Placeholders */}
                                     <div>
-                                        <p className="text-3xl font-bold">2</p>
+                                        <p className="text-3xl font-bold">0</p>
                                         <p className="text-sm text-primary-foreground/80">New Clients</p>
                                     </div>
                                     <div>
-                                        <p className="text-3xl font-bold">4.9</p>
+                                        <p className="text-3xl font-bold">5.0</p>
                                         <p className="text-sm text-primary-foreground/80">Avg Rating</p>
                                     </div>
                                 </div>

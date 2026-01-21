@@ -23,6 +23,7 @@ import { Header } from '@/components/layout';
 import { CoachCard } from '@/components/marketplace';
 import { CoachFiltersSidebar, FilterState } from '@/components/marketplace/coach-filters';
 import { coaches } from '@/lib/mock-data';
+import { isDemoMode } from '@/lib/utils';
 
 export default function BrowseCoachesPage() {
     const [filters, setFilters] = useState<FilterState>({
@@ -61,7 +62,7 @@ export default function BrowseCoachesPage() {
     };
 
     const filteredCoaches = useMemo(() => {
-        let result = [...coaches];
+        let result = isDemoMode() ? [...coaches] : [];
 
         // Search filter
         if (filters.search) {

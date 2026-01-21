@@ -113,8 +113,12 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Calculate fees
-        const fees = calculateFees(pkg.priceCents);
+        // Calculate fees - ADD ON model
+        // Fee = Price * 10%
+        // Total = Price + Fee
+        const platformFeeCents = Math.round(pkg.priceCents * 0.10);
+        const totalAmountCents = pkg.priceCents + platformFeeCents;
+        const payoutCents = pkg.priceCents;
 
         // Create booking in PENDING_PAYMENT status
         const booking = await prisma.booking.create({
@@ -125,21 +129,22 @@ export async function POST(req: NextRequest) {
                 startTime: startDateTime,
                 endTime: endDateTime,
                 status: BookingStatus.PENDING_PAYMENT,
-                amountCents: fees.amountCents,
-                platformFeeCents: fees.platformFeeCents,
-                payoutCents: fees.payoutCents,
+                amountCents: totalAmountCents,
+                platformFeeCents: platformFeeCents,
+                payoutCents: payoutCents,
                 currency: pkg.currency,
             },
         });
 
         // Create Stripe PaymentIntent
         const { paymentIntent } = await createPaymentIntent({
-            amountCents: pkg.priceCents,
+            amountCents: totalAmountCents,
             currency: pkg.currency,
             coachStripeAccountId: coach.stripeAccountId,
             bookingId: booking.id,
             clientEmail: user.email,
             description: `${pkg.title} with ${coach.displayName}`,
+            applicationFeeCents: platformFeeCents
         });
 
         // Update booking with PaymentIntent ID
@@ -152,9 +157,9 @@ export async function POST(req: NextRequest) {
             bookingId: booking.id,
             clientSecret: paymentIntent.client_secret,
             amount: {
-                total: fees.amountCents,
-                platformFee: fees.platformFeeCents,
-                coachPayout: fees.payoutCents,
+                total: totalAmountCents,
+                platformFee: platformFeeCents,
+                coachPayout: payoutCents,
                 currency: pkg.currency,
             },
         }, { status: 201 });

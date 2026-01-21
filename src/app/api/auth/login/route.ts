@@ -39,13 +39,7 @@ export async function POST(req: NextRequest) {
         const user = await prisma.user.findUnique({
             where: { email: email.toLowerCase() },
             include: {
-                coachProfile: {
-                    select: {
-                        id: true,
-                        displayName: true,
-                        stripeOnboarded: true,
-                    },
-                },
+                coachProfile: true,
             },
         });
 
@@ -87,7 +81,7 @@ export async function POST(req: NextRequest) {
     } catch (error) {
         console.error('Login error:', error);
         return NextResponse.json(
-            { error: 'Internal server error' },
+            { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
         );
     }

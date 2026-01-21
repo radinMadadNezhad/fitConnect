@@ -4,10 +4,11 @@ import { hashPassword, signToken, setAuthCookie, checkRateLimit, getRateLimitId 
 import { registerSchema, formatZodErrors } from '@/lib/validators';
 import { UserRole } from '@prisma/client';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
+    console.log("DEBUG_DB_URL_CHECK:", process.env.DATABASE_URL ? "Defined and starts with " + process.env.DATABASE_URL.substring(0, 15) : "Undefined");
     try {
         // Rate limiting
-        const rateLimitId = getRateLimitId(req, 'register');
+        const rateLimitId = getRateLimitId(req as NextRequest, 'register');
         const rateLimit = checkRateLimit(rateLimitId);
 
         if (!rateLimit.allowed) {
@@ -103,9 +104,13 @@ export async function POST(req: NextRequest) {
             { status: 201 }
         );
     } catch (error) {
-        console.error('Registration error:', error);
+        console.error("DEBUG_REGISTER_ERROR:", error);
+        // @ts-ignore
+        console.error("DEBUG_REGISTER_ERROR_MSG:", error.message);
+        // @ts-ignore
+        console.error("DEBUG_REGISTER_ERROR_CODE:", error.code);
         return NextResponse.json(
-            { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
+            { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown" },
             { status: 500 }
         );
     }
