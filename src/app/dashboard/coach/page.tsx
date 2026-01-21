@@ -15,7 +15,7 @@ import {
     Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
@@ -25,6 +25,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 import { Header } from '@/components/layout';
 import { KPICard } from '@/components/common';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,7 @@ export default function CoachDashboardPage() {
     const { user, isLoading: authLoading } = useAuth();
     const router = useRouter();
     const [coachBookings, setCoachBookings] = useState<any[]>([]);
+    const [coachPackages, setCoachPackages] = useState<any[]>([]);
     const [coachId, setCoachId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -74,6 +76,13 @@ export default function CoachDashboardPage() {
                         setCoachId(data.coachProfile.id);
                     }
                 }
+
+                // Fetch Packages
+                const packagesRes = await fetch('/api/coach/packages');
+                if (packagesRes.ok) {
+                    const data = await packagesRes.json();
+                    setCoachPackages(Array.isArray(data) ? data : []);
+                }
             } catch (error) {
                 console.error('Failed to load dashboard data', error);
             } finally {
@@ -98,6 +107,59 @@ export default function CoachDashboardPage() {
             hour: 'numeric',
             minute: '2-digit',
         });
+    };
+
+    const handleCancel = async (bookingId: string) => {
+        try {
+            const res = await fetch(`/api/bookings/${bookingId}/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason: 'Coach cancelled from dashboard' }),
+            });
+
+            if (!res.ok) throw new Error('Failed to cancel cancellation');
+
+            toast.success('Booking cancelled');
+            // Refresh bookings
+            const bookingsRes = await fetch('/api/bookings');
+            if (bookingsRes.ok) {
+                const data = await bookingsRes.json();
+                setCoachBookings(data.bookings || []);
+            }
+        } catch (error) {
+            toast.error('Could not cancel booking');
+        }
+    };
+
+    const handleReschedule = async (bookingId: string, newDateStr: string) => {
+        try {
+            const newDate = new Date(newDateStr);
+            if (isNaN(newDate.getTime())) {
+                toast.error('Invalid date format');
+                return;
+            }
+
+            const res = await fetch(`/api/bookings/${bookingId}/reschedule`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ startTime: newDate.toISOString() }),
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to reschedule');
+            }
+
+            toast.success('Booking rescheduled');
+            // Refresh bookings
+            const bookingsRes = await fetch('/api/bookings');
+            if (bookingsRes.ok) {
+                const data = await bookingsRes.json();
+                setCoachBookings(data.bookings || []);
+            }
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Could not reschedule booking');
+        }
     };
 
     // Derived state
@@ -144,7 +206,7 @@ export default function CoachDashboardPage() {
                     </div>
                     <div className="flex gap-2">
                         <Button asChild variant="outline" className="rounded-xl" disabled={!coachId}>
-                            <Link href={coachId ? `/booking/${coachId}` : '/coaches'}>
+                            <Link href={coachId ? `/coaches/${coachId}` : '/coaches'}>
                                 View Public Profile
                             </Link>
                         </Button>
@@ -231,10 +293,30 @@ export default function CoachDashboardPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem>View Details</DropdownMenuItem>
-                                                    <DropdownMenuItem>Message Client</DropdownMenuItem>
-                                                    <DropdownMenuItem>Reschedule</DropdownMenuItem>
-                                                    <DropdownMenuItem className="text-destructive">Cancel</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/coach/bookings/${booking.id}`)}>
+                                                        View Details
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => router.push('/messages')}>
+                                                        Message Client
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() => {
+                                                            const newDate = prompt('Enter new date/time (YYYY-MM-DD HH:MM)');
+                                                            if (newDate) handleReschedule(booking.id, newDate);
+                                                        }}
+                                                    >
+                                                        Reschedule
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className="text-destructive"
+                                                        onClick={() => {
+                                                            if (confirm('Are you sure you want to cancel this booking?')) {
+                                                                handleCancel(booking.id);
+                                                            }
+                                                        }}
+                                                    >
+                                                        Cancel
+                                                    </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </div>
@@ -258,9 +340,54 @@ export default function CoachDashboardPage() {
                                     </Link>
                                 </Button>
                             </div>
-                            <div className="p-8 text-center text-muted-foreground">
-                                <p>Manage your coaching packages here.</p>
-                                {/* Future: Map real packages here */}
+                            <div className="p-6">
+                                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {coachPackages.map((pkg) => (
+                                        <Card key={pkg.id} className="flex flex-col">
+                                            <CardHeader className="pb-3">
+                                                <div className="flex justify-between items-start">
+                                                    <CardTitle className="text-base font-semibold">{pkg.title}</CardTitle>
+                                                    <Badge variant={pkg.type === 'ONLINE' ? 'secondary' : 'outline'}>
+                                                        {pkg.type === 'ONLINE' ? 'Online' : 'In-Person'}
+                                                    </Badge>
+                                                </div>
+                                                <CardDescription className="line-clamp-2 min-h-[40px]">
+                                                    {pkg.description}
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="flex-1 pb-3">
+                                                <div className="flex items-baseline justify-between">
+                                                    <div className="text-2xl font-bold">
+                                                        ${pkg.priceCents / 100}
+                                                    </div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        {pkg.durationMins} mins
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                            <div className="p-4 pt-0 mt-auto">
+                                                <Button asChild variant="outline" className="w-full">
+                                                    <Link href={`/dashboard/coach/packages/${pkg.id}/edit`}>
+                                                        Edit Details
+                                                    </Link>
+                                                </Button>
+                                            </div>
+                                        </Card>
+                                    ))}
+
+                                    <Card className="flex flex-col items-center justify-center border-dashed p-8 text-center bg-muted/20 hover:bg-muted/40 transition-colors">
+                                        <div className="mb-4 rounded-full bg-primary/10 p-4">
+                                            <Plus className="h-6 w-6 text-primary" />
+                                        </div>
+                                        <h3 className="font-semibold">Create New Package</h3>
+                                        <p className="mt-1 mb-4 text-sm text-muted-foreground">
+                                            Add a new coaching service for clients.
+                                        </p>
+                                        <Button asChild>
+                                            <Link href="/dashboard/coach/packages/new">Create Package</Link>
+                                        </Button>
+                                    </Card>
+                                </div>
                             </div>
                         </Card>
 

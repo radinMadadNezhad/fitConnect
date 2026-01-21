@@ -21,6 +21,7 @@ import { Header } from '@/components/layout';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from 'sonner';
+import { subscribeToThread } from '@/lib/supabase';
 
 interface Message {
     id: string;
@@ -71,9 +72,36 @@ export default function MessagesClient() {
     }, [user]);
 
     // Fetch Messages when conversation selected
+    // Subscribe to Realtime updates
     useEffect(() => {
         if (!selectedConversation) return;
-        setMessages(selectedConversation.messages || []);
+
+        // Initial fetch
+        const fetchMessages = async () => {
+            try {
+                const res = await fetch(`/api/messages/${selectedConversation.id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setMessages(data);
+                }
+            } catch (error) {
+                console.error('Error fetching messages:', error);
+            }
+        };
+        fetchMessages();
+
+        // Subscribe to new messages
+        const unsubscribe = subscribeToThread(selectedConversation.id, (newMessage) => {
+            // Check if we already have this message (deduplicate)
+            setMessages((prev) => {
+                if (prev.some(m => m.id === newMessage.id)) return prev;
+                return [...prev, { ...newMessage, status: 'delivered' }];
+            });
+        });
+
+        return () => {
+            unsubscribe();
+        };
     }, [selectedConversation]);
 
     // Auto-scroll to bottom

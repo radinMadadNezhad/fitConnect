@@ -8,6 +8,42 @@ interface Params {
     params: Promise<{ id: string }>;
 }
 
+// GET - Get single package
+export async function GET(req: NextRequest, { params }: Params) {
+    try {
+        let user: AuthUser;
+        try {
+            user = await requireRole(UserRole.COACH);
+        } catch {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const { id } = await params;
+
+        const profile = await prisma.coachProfile.findUnique({
+            where: { userId: user.userId },
+            select: { id: true },
+        });
+
+        if (!profile) {
+            return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+        }
+
+        const pkg = await prisma.package.findFirst({
+            where: { id, coachId: profile.id },
+        });
+
+        if (!pkg) {
+            return NextResponse.json({ error: 'Package not found' }, { status: 404 });
+        }
+
+        return NextResponse.json(pkg);
+    } catch (error) {
+        console.error('Get package error:', error);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+}
+
 // PATCH - Update package
 export async function PATCH(req: NextRequest, { params }: Params) {
     try {

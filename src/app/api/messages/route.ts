@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { broadcastMessage } from '@/lib/supabase';
 
 export async function GET(req: NextRequest) {
     try {
@@ -106,6 +107,19 @@ export async function POST(req: NextRequest) {
             where: { id: targetThreadId },
             data: { lastMessageAt: new Date() }
         });
+
+        // Broadcast to realtime channel
+        try {
+            await broadcastMessage(targetThreadId, {
+                id: message.id,
+                senderId: message.senderId,
+                content: message.content,
+                createdAt: message.createdAt.toISOString()
+            });
+        } catch (error) {
+            console.error('Failed to broadcast message:', error);
+            // Don't fail the request if broadcast fails
+        }
 
         return NextResponse.json(message);
 

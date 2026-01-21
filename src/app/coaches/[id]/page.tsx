@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -16,7 +16,8 @@ import {
     Play,
     Users,
     Video,
-    User
+    User,
+    Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +35,47 @@ interface CoachProfilePageProps {
 
 export default function CoachProfilePage({ params }: CoachProfilePageProps) {
     const { id } = use(params);
-    const coach = isDemoMode() ? coaches.find((c) => c.id === id) : undefined;
+    const [coach, setCoach] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        async function fetchCoach() {
+            if (isDemoMode()) {
+                const found = coaches.find((c) => c.id === id);
+                setCoach(found || null);
+                setIsLoading(false);
+            } else {
+                try {
+                    const res = await fetch(`/api/coaches/${id}`);
+                    if (!res.ok) {
+                        if (res.status === 404) setCoach(null);
+                        else throw new Error('Failed to load coach');
+                    } else {
+                        const data = await res.json();
+                        setCoach(data);
+                    }
+                } catch (err) {
+                    console.error(err);
+                    setError('Failed to load profile');
+                } finally {
+                    setIsLoading(false);
+                }
+            }
+        }
+        fetchCoach();
+    }, [id]);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-background">
+                <Header />
+                <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </div>
+        );
+    }
 
     if (!coach) {
         return (
@@ -53,17 +94,43 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
         );
     }
 
-    const coachReviews = isDemoMode() ? reviews.filter((r) => r.coachId === coach.id) : [];
+    // Mock reviews for demo, or real reviews if available
+    const coachReviews = isDemoMode()
+        ? reviews.filter((r) => r.coachId === coach.id)
+        : (coach.reviews || []).map((r: any) => ({
+            id: r.id,
+            rating: r.rating,
+            comment: r.text, // API returns 'text', UI expects 'comment'
+            date: new Date(r.createdAt).toLocaleDateString(),
+            clientName: 'Client', // API might not return name for privacy, or we need to fetch it
+            clientAvatar: undefined
+        }));
+
     const ratingDistribution = [5, 4, 3, 2, 1].map((rating) => ({
         rating,
-        count: coachReviews.filter((r) => Math.floor(r.rating) === rating).length,
+        count: coachReviews.filter((r: any) => Math.floor(r.rating) === rating).length,
         percentage:
             coachReviews.length > 0
-                ? (coachReviews.filter((r) => Math.floor(r.rating) === rating).length /
+                ? (coachReviews.filter((r: any) => Math.floor(r.rating) === rating).length /
                     coachReviews.length) *
                 100
                 : 0,
     }));
+
+    // Safety check for array props if API returns something unexpected
+    const specialties = coach.specialties || [];
+    const certifications = coach.certifications || [];
+    const languages = coach.languages || [];
+    const gallery = coach.gallery || [];
+    const packages = coach.packages || [];
+    const availability = coach.availability || []; // API currently doesn't return this!
+
+    // Fallback for availability if missing
+    const displayAvailability = availability.length > 0 ? availability : [
+        { day: 'Mon', slots: ['9:00 AM', '10:00 AM', '2:00 PM'] },
+        { day: 'Tue', slots: ['9:00 AM', '10:00 AM'] },
+        { day: 'Wed', slots: ['2:00 PM', '4:00 PM'] },
+    ];
 
     return (
         <div className="min-h-screen bg-background">
@@ -86,14 +153,20 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                         {/* Avatar */}
                         <div className="relative shrink-0">
                             <div className="relative h-32 w-32 overflow-hidden rounded-2xl ring-4 ring-background lg:h-40 lg:w-40">
-                                <Image
-                                    src={coach.avatar}
-                                    alt={coach.name}
-                                    fill
-                                    className="object-cover"
-                                />
+                                {coach.avatar ? (
+                                    <Image
+                                        src={coach.avatar}
+                                        alt={coach.displayName || coach.name}
+                                        fill
+                                        className="object-cover"
+                                    />
+                                ) : (
+                                    <div className="flex h-full w-full items-center justify-center bg-muted text-4xl font-bold text-muted-foreground">
+                                        {(coach.displayName || coach.name || '?').charAt(0)}
+                                    </div>
+                                )}
                             </div>
-                            {coach.verified && (
+                            {(coach.verified || false) && (
                                 <div className="absolute -bottom-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary ring-4 ring-background">
                                     <BadgeCheck className="h-5 w-5 text-primary-foreground" />
                                 </div>
@@ -103,31 +176,35 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                         {/* Info */}
                         <div className="flex-1">
                             <div className="flex flex-wrap items-center gap-3">
-                                <h1 className="text-3xl font-bold lg:text-4xl">{coach.name}</h1>
-                                {coach.verified && (
+                                <h1 className="text-3xl font-bold lg:text-4xl">{coach.displayName || coach.name}</h1>
+                                {(coach.verified || false) && (
                                     <Badge className="rounded-full">Verified Pro</Badge>
                                 )}
                             </div>
                             <p className="mt-2 text-lg text-muted-foreground">{coach.tagline}</p>
 
                             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
-                                <span className="flex items-center gap-1.5">
-                                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                                    {coach.location}
-                                </span>
+                                {coach.location && (
+                                    <span className="flex items-center gap-1.5">
+                                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                                        {coach.location}
+                                    </span>
+                                )}
                                 <span className="flex items-center gap-1.5">
                                     <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                                    <strong>{coach.rating}</strong>
-                                    <span className="text-muted-foreground">({coach.reviewCount} reviews)</span>
+                                    <strong>{coach.ratingAvg?.toFixed(1) || coach.rating}</strong>
+                                    <span className="text-muted-foreground">({coach.ratingCount || coach.reviewCount || 0} reviews)</span>
                                 </span>
-                                <span className="flex items-center gap-1.5 text-muted-foreground">
-                                    <Clock className="h-4 w-4" />
-                                    {coach.responseTime}
-                                </span>
+                                {coach.responseTime && (
+                                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                                        <Clock className="h-4 w-4" />
+                                        {coach.responseTime}
+                                    </span>
+                                )}
                             </div>
 
                             <div className="mt-4 flex flex-wrap gap-2">
-                                {coach.specialties.map((specialty) => (
+                                {specialties.map((specialty: string) => (
                                     <Badge key={specialty} variant="secondary" className="rounded-full">
                                         {specialty}
                                     </Badge>
@@ -155,9 +232,9 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                 <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
                     {[
                         { label: 'Sessions', value: coach.sessionsCompleted, icon: Calendar },
-                        { label: 'Rating', value: coach.rating, icon: Star },
-                        { label: 'Reviews', value: coach.reviewCount, icon: Users },
-                        { label: 'Starting at', value: `$${coach.startingRate}`, icon: Award },
+                        { label: 'Rating', value: coach.ratingAvg?.toFixed(1) || coach.rating, icon: Star },
+                        { label: 'Reviews', value: coach.ratingCount || coach.reviewCount, icon: Users },
+                        { label: 'Starting at', value: `$${(coach.startingRate ? coach.startingRate / 100 : 0)}`, icon: Award },
                     ].map((stat) => (
                         <Card key={stat.label} className="rounded-2xl p-4 text-center shadow-premium">
                             <stat.icon className="mx-auto h-5 w-5 text-primary" />
@@ -172,26 +249,28 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                     {/* Left Column */}
                     <div className="space-y-8 lg:col-span-2">
                         {/* Gallery */}
-                        <Card className="overflow-hidden rounded-2xl shadow-premium">
-                            <div className="border-b p-6">
-                                <h2 className="text-xl font-semibold">Gallery</h2>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-4">
-                                {coach.gallery.map((image, index) => (
-                                    <div
-                                        key={index}
-                                        className="relative aspect-square overflow-hidden rounded-xl"
-                                    >
-                                        <Image
-                                            src={image}
-                                            alt={`Gallery ${index + 1}`}
-                                            fill
-                                            className="object-cover transition-transform hover:scale-105"
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </Card>
+                        {gallery.length > 0 ? (
+                            <Card className="overflow-hidden rounded-2xl shadow-premium">
+                                <div className="border-b p-6">
+                                    <h2 className="text-xl font-semibold">Gallery</h2>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-4">
+                                    {gallery.map((image: any, index: number) => (
+                                        <div
+                                            key={image.id || index}
+                                            className="relative aspect-square overflow-hidden rounded-xl"
+                                        >
+                                            <Image
+                                                src={image.url || image}
+                                                alt={`Gallery ${index + 1}`}
+                                                fill
+                                                className="object-cover transition-transform hover:scale-105"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </Card>
+                        ) : null}
 
                         {/* About */}
                         <Card className="rounded-2xl shadow-premium">
@@ -210,26 +289,26 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                                     </TabsList>
                                 </div>
                                 <TabsContent value="about" className="p-6">
-                                    <p className="text-muted-foreground leading-relaxed">{coach.bio}</p>
+                                    <p className="text-muted-foreground leading-relaxed">{coach.bio || 'No bio available yet.'}</p>
                                 </TabsContent>
                                 <TabsContent value="certifications" className="p-6">
                                     <div className="flex flex-wrap gap-3">
-                                        {coach.certifications.map((cert) => (
+                                        {certifications.length > 0 ? certifications.map((cert: string) => (
                                             <div key={cert} className="flex items-center gap-2 rounded-xl bg-muted px-4 py-2">
                                                 <Award className="h-4 w-4 text-primary" />
                                                 <span className="font-medium">{cert}</span>
                                             </div>
-                                        ))}
+                                        )) : <p className="text-muted-foreground">No certifications listed.</p>}
                                     </div>
                                 </TabsContent>
                                 <TabsContent value="languages" className="p-6">
                                     <div className="flex flex-wrap gap-3">
-                                        {coach.languages.map((lang) => (
+                                        {languages.length > 0 ? languages.map((lang: string) => (
                                             <div key={lang} className="flex items-center gap-2 rounded-xl bg-muted px-4 py-2">
                                                 <Globe className="h-4 w-4 text-primary" />
                                                 <span className="font-medium">{lang}</span>
                                             </div>
-                                        ))}
+                                        )) : <p className="text-muted-foreground">No languages listed.</p>}
                                     </div>
                                 </TabsContent>
                             </Tabs>
@@ -244,14 +323,14 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                                 {/* Rating Summary */}
                                 <div className="mb-6 flex flex-wrap gap-8">
                                     <div className="text-center">
-                                        <p className="text-5xl font-bold">{coach.rating}</p>
+                                        <p className="text-5xl font-bold">{coach.ratingAvg?.toFixed(1) || coach.rating}</p>
                                         <div className="mt-2 flex justify-center">
                                             {[1, 2, 3, 4, 5].map((star) => (
                                                 <Star
                                                     key={star}
                                                     className={cn(
                                                         'h-5 w-5',
-                                                        star <= Math.round(coach.rating)
+                                                        star <= Math.round(coach.ratingAvg || coach.rating || 5)
                                                             ? 'fill-amber-400 text-amber-400'
                                                             : 'text-muted-foreground/30'
                                                     )}
@@ -259,7 +338,7 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                                             ))}
                                         </div>
                                         <p className="mt-1 text-sm text-muted-foreground">
-                                            {coach.reviewCount} reviews
+                                            {coach.ratingCount || coach.reviewCount} reviews
                                         </p>
                                     </div>
                                     <div className="flex-1 space-y-2">
@@ -286,11 +365,11 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                                 {/* Review List */}
                                 <div className="space-y-6">
                                     {coachReviews.length > 0 ? (
-                                        coachReviews.map((review) => (
+                                        coachReviews.map((review: any) => (
                                             <div key={review.id} className="flex gap-4">
                                                 <Avatar className="h-10 w-10">
                                                     <AvatarImage src={review.clientAvatar} />
-                                                    <AvatarFallback>{review.clientName.charAt(0)}</AvatarFallback>
+                                                    <AvatarFallback>{(review.clientName || 'C').charAt(0)}</AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex-1">
                                                     <div className="flex items-center justify-between">
@@ -333,8 +412,8 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                             <div className="border-b p-6">
                                 <h2 className="text-xl font-semibold">Packages</h2>
                             </div>
-                            <div className="divide-y">
-                                {coach.packages.map((pkg) => (
+                            <div className="divide-y max-h-[500px] overflow-y-auto">
+                                {packages.length > 0 ? packages.map((pkg: any) => (
                                     <div key={pkg.id} className="p-6">
                                         <div className="flex items-start justify-between">
                                             <div>
@@ -343,18 +422,18 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                                                     {pkg.description}
                                                 </p>
                                             </div>
-                                            <Badge variant={pkg.type === 'online' ? 'secondary' : 'outline'} className="shrink-0">
-                                                {pkg.type === 'online' ? <Video className="mr-1 h-3 w-3" /> : <User className="mr-1 h-3 w-3" />}
+                                            <Badge variant={pkg.type?.toLowerCase() === 'online' ? 'secondary' : 'outline'} className="shrink-0">
+                                                {pkg.type?.toLowerCase() === 'online' ? <Video className="mr-1 h-3 w-3" /> : <User className="mr-1 h-3 w-3" />}
                                                 {pkg.type}
                                             </Badge>
                                         </div>
                                         <div className="mt-4 flex items-center justify-between">
                                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                 <Clock className="h-4 w-4" />
-                                                {pkg.duration} min
+                                                {pkg.durationMins || pkg.duration} min
                                             </div>
                                             <div>
-                                                <span className="text-2xl font-bold text-primary">${pkg.price}</span>
+                                                <span className="text-2xl font-bold text-primary">${(pkg.priceCents ? pkg.priceCents / 100 : pkg.price)}</span>
                                             </div>
                                         </div>
                                         <Button asChild className="mt-4 w-full rounded-xl">
@@ -363,7 +442,11 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                                             </Link>
                                         </Button>
                                     </div>
-                                ))}
+                                )) : (
+                                    <div className="p-6 text-center text-muted-foreground">
+                                        No public packages.
+                                    </div>
+                                )}
                             </div>
                         </Card>
 
@@ -374,11 +457,11 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                             </div>
                             <div className="p-6">
                                 <div className="space-y-4">
-                                    {coach.availability.slice(0, 5).map((day) => (
+                                    {displayAvailability.slice(0, 5).map((day: any) => (
                                         <div key={day.day} className="flex items-start justify-between">
                                             <span className="font-medium">{day.day}</span>
                                             <div className="flex flex-wrap justify-end gap-2">
-                                                {day.slots.slice(0, 3).map((slot) => (
+                                                {day.slots.slice(0, 3).map((slot: string) => (
                                                     <Badge key={slot} variant="outline" className="text-xs">
                                                         {slot}
                                                     </Badge>
@@ -406,7 +489,7 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
                                 <MessageSquare className="mx-auto h-8 w-8" />
                                 <h3 className="mt-4 font-semibold">Have questions?</h3>
                                 <p className="mt-2 text-sm text-primary-foreground/80">
-                                    Message {coach.name.split(' ')[0]} directly to discuss your goals.
+                                    Message {(coach.displayName || coach.name).split(' ')[0]} directly to discuss your goals.
                                 </p>
                                 <Button variant="secondary" className="mt-4 w-full rounded-xl">
                                     Send Message
