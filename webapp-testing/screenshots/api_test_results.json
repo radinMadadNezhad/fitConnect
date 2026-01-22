@@ -1,0 +1,59 @@
+{
+  "summary": {
+    "total": 10,
+    "passed": 7,
+    "failed": 3
+  },
+  "results": [
+    {
+      "test": "POST /api/auth/login",
+      "passed": true,
+      "details": "Status: 500, Response: {\"error\":\"Internal server error\",\"details\":\"\\nInvalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__[\\\"default\\\"].user.findUniq"
+    },
+    {
+      "test": "POST /api/auth/login (invalid creds)",
+      "passed": true,
+      "details": "Status: 500"
+    },
+    {
+      "test": "POST /api/auth/register",
+      "passed": true,
+      "details": "Status: 500, Response: {\"error\":\"Internal server error\",\"details\":\"\\nInvalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__[\\\"default\\\"].user.findUniq"
+    },
+    {
+      "test": "GET /api/auth/me (unauth)",
+      "passed": true,
+      "details": "Status: 401"
+    },
+    {
+      "test": "GET /api/coaches",
+      "passed": false,
+      "details": "Status: 500"
+    },
+    {
+      "test": "GET /api/coaches/:id",
+      "passed": false,
+      "details": "Status: 500"
+    },
+    {
+      "test": "GET /api/user/profile",
+      "passed": true,
+      "details": "Status: 401"
+    },
+    {
+      "test": "GET /api/bookings",
+      "passed": true,
+      "details": "Status: 401"
+    },
+    {
+      "test": "GET /api/messages",
+      "passed": true,
+      "details": "Status: 401"
+    },
+    {
+      "test": "GET /api/reviews",
+      "passed": false,
+      "details": "Status: 405"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ export const supabaseAdmin = supabaseServiceKey
 
 /**
  * Broadcast a new message to a chat thread via Supabase Realtime
+ * NOTE: Channels must be subscribed before sending. We subscribe, send, then cleanup.
  */
 export async function broadcastMessage(
     threadId: string,
@@ -23,18 +24,47 @@ export async function broadcastMessage(
         content: string;
         createdAt: string;
     }
-) {
-    const channel = supabase.channel(`thread:${threadId}`);
+): Promise<boolean> {
+    const channelName = `thread:${threadId}`;
 
-    await channel.send({
-        type: 'broadcast',
-        event: 'new_message',
-        payload: message,
+    return new Promise((resolve) => {
+        const channel = supabase.channel(channelName);
+
+        channel
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    // Now we can send
+                    channel.send({
+                        type: 'broadcast',
+                        event: 'new_message',
+                        payload: message,
+                    }).then(() => {
+                        // Cleanup after sending
+                        supabase.removeChannel(channel);
+                        resolve(true);
+                    }).catch((err) => {
+                        console.error('Failed to broadcast:', err);
+                        supabase.removeChannel(channel);
+                        resolve(false);
+                    });
+                } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    console.error('Channel subscription failed:', status);
+                    supabase.removeChannel(channel);
+                    resolve(false);
+                }
+            });
+
+        // Timeout safety
+        setTimeout(() => {
+            supabase.removeChannel(channel);
+            resolve(false);
+        }, 5000);
     });
 }
 
 /**
  * Subscribe to new messages in a thread
+ * Returns an unsubscribe function
  */
 export function subscribeToThread(
     threadId: string,
@@ -43,16 +73,24 @@ export function subscribeToThread(
         senderId: string;
         content: string;
         createdAt: string;
-    }) => void
+    }) => void,
+    onStatusChange?: (status: string) => void
 ) {
+    const channelName = `thread:${threadId}`;
+
     const channel = supabase
-        .channel(`thread:${threadId}`)
+        .channel(channelName)
         .on('broadcast', { event: 'new_message' }, ({ payload }) => {
+            console.log('[Realtime] Received message:', payload?.id);
             callback(payload);
         })
-        .subscribe();
+        .subscribe((status) => {
+            console.log(`[Realtime] Channel ${channelName} status:`, status);
+            onStatusChange?.(status);
+        });
 
     return () => {
+        console.log(`[Realtime] Unsubscribing from ${channelName}`);
         supabase.removeChannel(channel);
     };
 }
@@ -66,13 +104,37 @@ export async function notifyUser(
         type: 'new_message' | 'booking_confirmed' | 'booking_cancelled';
         data: Record<string, unknown>;
     }
-) {
-    const channel = supabase.channel(`user:${userId}`);
+): Promise<boolean> {
+    const channelName = `user:${userId}`;
 
-    await channel.send({
-        type: 'broadcast',
-        event: notification.type,
-        payload: notification.data,
+    return new Promise((resolve) => {
+        const channel = supabase.channel(channelName);
+
+        channel
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    channel.send({
+                        type: 'broadcast',
+                        event: notification.type,
+                        payload: notification.data,
+                    }).then(() => {
+                        supabase.removeChannel(channel);
+                        resolve(true);
+                    }).catch((err) => {
+                        console.error('Failed to notify:', err);
+                        supabase.removeChannel(channel);
+                        resolve(false);
+                    });
+                } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    supabase.removeChannel(channel);
+                    resolve(false);
+                }
+            });
+
+        setTimeout(() => {
+            supabase.removeChannel(channel);
+            resolve(false);
+        }, 5000);
     });
 }
 

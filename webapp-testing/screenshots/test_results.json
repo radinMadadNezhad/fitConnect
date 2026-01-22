@@ -1,0 +1,139 @@
+{
+  "summary": {
+    "total": 26,
+    "passed": 20,
+    "failed": 6
+  },
+  "results": [
+    {
+      "test": "Landing page loads",
+      "passed": true,
+      "details": "Found 5 FitConnect branding elements"
+    },
+    {
+      "test": "Buttons present on landing",
+      "passed": true,
+      "details": "Found 6 buttons"
+    },
+    {
+      "test": "Navigation links present",
+      "passed": true,
+      "details": "Found 16 links"
+    },
+    {
+      "test": "Call-to-action button exists",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Login link present",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Email input present",
+      "passed": false,
+      "details": ""
+    },
+    {
+      "test": "Password input present",
+      "passed": false,
+      "details": ""
+    },
+    {
+      "test": "Submit button present",
+      "passed": false,
+      "details": ""
+    },
+    {
+      "test": "Role selection options",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Login email input present",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Login password input present",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Login submit button present",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Demo credentials hint visible",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Login with demo credentials",
+      "passed": false,
+      "details": "Error: Internal server error"
+    },
+    {
+      "test": "Coaches page loads",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Coach listings visible",
+      "passed": true,
+      "details": "Found 1 coach elements"
+    },
+    {
+      "test": "Search functionality present",
+      "passed": true,
+      "details": "Found 2 search inputs"
+    },
+    {
+      "test": "Client dashboard accessible",
+      "passed": false,
+      "details": "URL: http://localhost:3000/login"
+    },
+    {
+      "test": "Dashboard has interactive elements",
+      "passed": true,
+      "details": "Found 5 buttons"
+    },
+    {
+      "test": "Messages page accessible",
+      "passed": false,
+      "details": ""
+    },
+    {
+      "test": "'Get Started' button/link clickable",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "'Find Your Coach' button/link clickable",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "'Browse Coaches' button/link clickable",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Responsive: Desktop (1920x1080)",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Responsive: Tablet (768x1024)",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "test": "Responsive: Mobile (375x667)",
+      "passed": true,
+      "details": ""
+    }
+  ]
+}

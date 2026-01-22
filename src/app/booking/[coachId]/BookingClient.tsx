@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -13,7 +13,8 @@ import {
     Video,
     User as UserIcon,
     MapPin,
-    Star
+    Star,
+    Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -24,6 +25,7 @@ import { Separator } from '@/components/ui/separator';
 import { Header } from '@/components/layout';
 import { cn, isDemoMode } from '@/lib/utils';
 import { toast } from 'sonner';
+import StripePayment from '@/components/common/StripePayment';
 
 // Define types locally since we are detaching from mock-data
 type Package = {
@@ -86,6 +88,9 @@ export default function BookingClient({ coach, currentUser }: BookingClientProps
     const totalAmount = sessionPrice + platformFee;
 
     const [isProcessing, setIsProcessing] = useState(false);
+    const [clientSecret, setClientSecret] = useState<string | null>(null);
+    const [bookingId, setBookingId] = useState<string | null>(null);
+    const [paymentLoading, setPaymentLoading] = useState(false);
 
     const handleBooking = async () => {
         if (!selectedPackage || !selectedDate || !selectedTime) return;
@@ -130,6 +135,58 @@ export default function BookingClient({ coach, currentUser }: BookingClientProps
         } finally {
             setIsProcessing(false);
         }
+    };
+
+    // Create payment intent when reaching step 4
+    useEffect(() => {
+        if (currentStep === 4 && selectedPackage && !clientSecret && !isDemoMode()) {
+            createPaymentIntent();
+        }
+    }, [currentStep, selectedPackage]);
+
+    const createPaymentIntent = async () => {
+        if (!selectedPackage || !selectedDate || !selectedTime || !currentUser) return;
+
+        setPaymentLoading(true);
+        try {
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + 1);
+            const startTimeIso = futureDate.toISOString();
+
+            const res = await fetch('/api/bookings/create-intent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    coachId: coach.id,
+                    packageId: selectedPackage.id,
+                    startTime: startTimeIso
+                })
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to create payment');
+            }
+
+            const data = await res.json();
+            setClientSecret(data.clientSecret);
+            setBookingId(data.bookingId);
+        } catch (error) {
+            console.error(error);
+            toast.error(error instanceof Error ? error.message : 'Payment setup failed');
+        } finally {
+            setPaymentLoading(false);
+        }
+    };
+
+    const handlePaymentSuccess = () => {
+        toast.success('Payment successful!');
+        router.push(`/booking/success${bookingId ? `?bookingId=${bookingId}` : ''}`);
+    };
+
+    const handlePaymentError = (error: string) => {
+        toast.error(error);
+        setIsProcessing(false);
     };
 
     const nextStep = () => {
@@ -406,6 +463,7 @@ export default function BookingClient({ coach, currentUser }: BookingClientProps
                                 </div>
                                 <div className="p-6 space-y-4">
                                     {isDemoMode() ? (
+                                        /* Demo Mode: Show fake card inputs */
                                         <>
                                             <div>
                                                 <Label htmlFor="cardNumber">Card Number</Label>
@@ -422,10 +480,20 @@ export default function BookingClient({ coach, currentUser }: BookingClientProps
                                                 </div>
                                             </div>
                                         </>
-                                    ) : (
-                                        <div className="p-4 bg-muted text-center rounded-xl">
-                                            <p className="text-muted-foreground">Stripe Payment Element would load here in production.</p>
+                                    ) : paymentLoading ? (
+                                        /* Loading State */
+                                        <div className="flex items-center justify-center py-8">
+                                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                            <span className="ml-2 text-muted-foreground">Setting up payment...</span>
                                         </div>
+                                    ) : (
+                                        /* Production Mode: Real Stripe Elements */
+                                        <StripePayment
+                                            clientSecret={clientSecret}
+                                            totalAmount={totalAmount}
+                                            onSuccess={handlePaymentSuccess}
+                                            onError={handlePaymentError}
+                                        />
                                     )}
                                     <div className="mt-6 flex items-center gap-2 rounded-xl bg-muted/50 p-4 text-sm">
                                         <CreditCard className="h-5 w-5 text-muted-foreground" />
