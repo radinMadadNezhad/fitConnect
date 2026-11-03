@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { sendBookingRescheduled } from '@/lib/email';
 import { BookingStatus } from '@prisma/client';
 
 interface Params {
@@ -28,11 +29,34 @@ export async function POST(req: NextRequest, { params }: Params) {
 
         const booking = await prisma.booking.findUnique({
             where: { id },
-            include: { package: true }
+            include: {
+                package: true,
+                client: { select: { email: true, displayName: true } },
+                coach: {
+                    select: {
+                        displayName: true,
+                        user: { select: { email: true } },
+                    },
+                },
+            }
         });
 
         if (!booking) {
             return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+        }
+
+        // Only live bookings can be moved. Without this, a CANCELLED or REFUNDED
+        // booking could be flipped back to CONFIRMED without a new payment.
+        const reschedulableStatuses: BookingStatus[] = [
+            BookingStatus.CONFIRMED,
+            BookingStatus.PENDING_PAYMENT,
+        ];
+
+        if (!reschedulableStatuses.includes(booking.status)) {
+            return NextResponse.json(
+                { error: `Cannot reschedule a booking with status ${booking.status}` },
+                { status: 409 }
+            );
         }
 
         let coachProfileId: string | undefined;
@@ -78,11 +102,25 @@ export async function POST(req: NextRequest, { params }: Params) {
             data: {
                 startTime: newStart,
                 endTime: newEnd,
-                status: BookingStatus.CONFIRMED // Re-confirm if it was pending? Keep simple for now.
+                // Status is deliberately left untouched: moving a session must not
+                // promote an unpaid PENDING_PAYMENT booking to CONFIRMED.
             }
         });
 
-        // TODO: Notify other party
+        // Notify both parties of the new time. sendEmail never throws, so a
+        // mail failure cannot fail an already-persisted reschedule.
+        await sendBookingRescheduled({
+            bookingId: booking.id,
+            clientEmail: booking.client.email,
+            clientName: booking.client.displayName || booking.client.email.split('@')[0],
+            coachEmail: booking.coach.user.email,
+            coachName: booking.coach.displayName,
+            packageTitle: booking.package.title,
+            previousStartTime: booking.startTime,
+            startTime: newStart,
+            amountCents: booking.amountCents,
+            currency: booking.currency,
+        });
 
         return NextResponse.json(updatedBooking);
 

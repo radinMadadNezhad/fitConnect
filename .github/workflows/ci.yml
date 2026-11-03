@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    env:
+      # Inert placeholders. Several modules read these at import time:
+      # src/lib/stripe.ts throws without STRIPE_SECRET_KEY, and auth.ts
+      # refuses a JWT_SECRET shorter than 32 characters. No real secrets are
+      # needed because nothing here talks to a live service or database.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/placeholder?schema=public
+      JWT_SECRET: ci-placeholder-signing-key-at-least-32-chars
+      STRIPE_SECRET_KEY: sk_test_placeholder
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_placeholder
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      EMAIL_PROVIDER: none
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      # Advisory for now: the repo carries 26 pre-existing ESLint errors in UI
+      # components. Flip this to a hard gate once that backlog is cleared,
+      # otherwise every run fails and people learn to ignore CI.
+      - name: Lint (advisory)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashPassword, signToken, setAuthCookie, checkRateLimit, getRateLimitId } from '@/lib/auth';
+import { sendWelcome } from '@/lib/email';
 import { registerSchema, formatZodErrors } from '@/lib/validators';
 import { UserRole } from '@prisma/client';
 
@@ -58,6 +59,9 @@ export async function POST(req: Request) {
                 email: email.toLowerCase(),
                 passwordHash,
                 role: role as UserRole,
+                // Every role keeps its name on the account; coaches additionally
+                // get it on their public profile below.
+                ...(displayName ? { displayName } : {}),
                 ...(role === 'COACH' && displayName
                     ? {
                         coachProfile: {
@@ -91,6 +95,14 @@ export async function POST(req: Request) {
 
         await setAuthCookie(token);
 
+        // Fire-and-forget welcome. sendEmail never throws, so a mail outage
+        // cannot block a successful signup.
+        await sendWelcome({
+            email: user.email,
+            name: displayName,
+            role: user.role,
+        });
+
         return NextResponse.json(
             {
                 message: 'Registration successful',
@@ -104,13 +116,20 @@ export async function POST(req: Request) {
             { status: 201 }
         );
     } catch (error) {
-        console.error("DEBUG_REGISTER_ERROR:", error);
-        // @ts-ignore
-        console.error("DEBUG_REGISTER_ERROR_MSG:", error.message);
-        // @ts-ignore
-        console.error("DEBUG_REGISTER_ERROR_CODE:", error.code);
+        // Log the detail server-side; never return it to the caller. Prisma
+        // errors can disclose schema and constraint names.
+        const code =
+            typeof error === 'object' && error !== null && 'code' in error
+                ? String((error as { code: unknown }).code)
+                : undefined;
+
+        console.error('Register error:', {
+            message: error instanceof Error ? error.message : String(error),
+            code,
+        });
+
         return NextResponse.json(
-            { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown" },
+            { error: 'Internal server error' },
             { status: 500 }
         );
     }

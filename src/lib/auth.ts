@@ -6,9 +6,41 @@ import { NextRequest, NextResponse } from 'next/server';
 // Local type definition to avoid Prisma import issues before migration
 export type UserRole = 'CLIENT' | 'COACH' | 'ADMIN';
 
-const JWT_SECRET = new TextEncoder().encode(
-    process.env.JWT_SECRET || 'fallback-secret-for-development-only'
-);
+/**
+ * Resolves the signing secret.
+ *
+ * A hardcoded fallback must never reach production: it is public (it lives in
+ * this repo's history), so anyone could mint a valid token for any account.
+ * Outside development we fail closed instead.
+ */
+function resolveJwtSecret(): string {
+    const secret = process.env.JWT_SECRET;
+
+    if (secret && secret.length >= 32) return secret;
+
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+            secret
+                ? 'JWT_SECRET must be at least 32 characters in production.'
+                : 'JWT_SECRET is not set. Refusing to start with an insecure signing key.'
+        );
+    }
+
+    if (secret) {
+        console.warn(
+            '[auth] JWT_SECRET is shorter than 32 characters. This is refused in production.'
+        );
+        return secret;
+    }
+
+    console.warn(
+        '[auth] JWT_SECRET is not set; using an insecure development-only key. ' +
+        'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64url\'))"'
+    );
+    return 'fallback-secret-for-development-only';
+}
+
+const JWT_SECRET = new TextEncoder().encode(resolveJwtSecret());
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const SALT_ROUNDS = 12;
 

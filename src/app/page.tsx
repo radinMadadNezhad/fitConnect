@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -21,9 +22,9 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { coaches } from '@/lib/mock-data';
 import { Header } from '@/components/layout';
-import { isDemoMode } from '@/lib/utils';
+import { Coach } from '@/lib/types';
+import { fetchCoaches } from '@/lib/coach-adapter';
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 20 },
@@ -39,7 +40,24 @@ const stagger = {
 };
 
 export default function LandingPage() {
-  const featuredCoaches = isDemoMode() ? coaches.slice(0, 6) : [];
+  const [featuredCoaches, setFeaturedCoaches] = useState<Coach[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchCoaches()
+      .then((list) => {
+        if (!cancelled) setFeaturedCoaches(list.slice(0, 6));
+      })
+      .catch((err) => {
+        // The landing page still reads fine without the featured grid
+        console.error('Failed to load featured coaches', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Search, SlidersHorizontal, X, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,8 +22,8 @@ import {
 import { Header } from '@/components/layout';
 import { CoachCard } from '@/components/marketplace';
 import { CoachFiltersSidebar, FilterState } from '@/components/marketplace/coach-filters';
-import { coaches } from '@/lib/mock-data';
-import { isDemoMode } from '@/lib/utils';
+import { Coach } from '@/lib/types';
+import { fetchCoaches } from '@/lib/coach-adapter';
 
 export default function BrowseCoachesPage() {
     const [filters, setFilters] = useState<FilterState>({
@@ -36,6 +36,29 @@ export default function BrowseCoachesPage() {
         sortBy: 'rating',
     });
     const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+    const [allCoaches, setAllCoaches] = useState<Coach[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+
+    useEffect(() => {
+        let cancelled = false;
+
+        fetchCoaches()
+            .then((list) => {
+                if (!cancelled) setAllCoaches(list);
+            })
+            .catch((err) => {
+                console.error('Failed to load coaches', err);
+                if (!cancelled) setLoadError('Could not load coaches. Please try again.');
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
         setFilters({ ...filters, [key]: value });
@@ -62,7 +85,7 @@ export default function BrowseCoachesPage() {
     };
 
     const filteredCoaches = useMemo(() => {
-        let result = isDemoMode() ? [...coaches] : [];
+        let result = [...allCoaches];
 
         // Search filter
         if (filters.search) {
@@ -123,7 +146,7 @@ export default function BrowseCoachesPage() {
         }
 
         return result;
-    }, [filters]);
+    }, [filters, allCoaches]);
 
     const activeFilterCount = [
         filters.location !== '',
@@ -262,7 +285,22 @@ export default function BrowseCoachesPage() {
 
                     {/* Coach Grid */}
                     <div className="flex-1">
-                        {filteredCoaches.length > 0 ? (
+                        {isLoading ? (
+                            <div className="flex items-center justify-center rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
+                                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                <span className="ml-3 text-sm text-muted-foreground">
+                                    Loading coaches...
+                                </span>
+                            </div>
+                        ) : loadError ? (
+                            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-destructive/40 bg-destructive/5 px-6 py-16 text-center">
+                                <h3 className="text-lg font-semibold">Could not load coaches</h3>
+                                <p className="mt-2 max-w-sm text-sm text-muted-foreground">{loadError}</p>
+                                <Button onClick={() => window.location.reload()} className="mt-6">
+                                    Retry
+                                </Button>
+                            </div>
+                        ) : filteredCoaches.length > 0 ? (
                             <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
                                 {filteredCoaches.map((coach) => (
                                     <CoachCard key={coach.id} coach={coach} />

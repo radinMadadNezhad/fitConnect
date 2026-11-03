@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { constructWebhookEvent, stripe } from '@/lib/stripe';
+import { sendBookingConfirmed } from '@/lib/email';
 import { BookingStatus, PaymentStatus } from '@prisma/client';
 import Stripe from 'stripe';
 
@@ -128,6 +129,40 @@ async function handlePaymentSucceeded(paymentIntent: Stripe.PaymentIntent) {
     });
 
     console.log(`Payment succeeded for booking ${bookingId}`);
+
+    // Notify both parties. Sent after the transaction commits so a mail failure
+    // can never roll back a recorded payment; sendEmail never throws, and the
+    // idempotency check above means a replayed webhook won't re-send.
+    const forEmail = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        select: {
+            startTime: true,
+            amountCents: true,
+            currency: true,
+            client: { select: { email: true, displayName: true } },
+            package: { select: { title: true } },
+            coach: {
+                select: {
+                    displayName: true,
+                    user: { select: { email: true } },
+                },
+            },
+        },
+    });
+
+    if (forEmail) {
+        await sendBookingConfirmed({
+            bookingId,
+            clientEmail: forEmail.client.email,
+            clientName: forEmail.client.displayName || forEmail.client.email.split('@')[0],
+            coachEmail: forEmail.coach.user.email,
+            coachName: forEmail.coach.displayName,
+            packageTitle: forEmail.package.title,
+            startTime: forEmail.startTime,
+            amountCents: forEmail.amountCents,
+            currency: forEmail.currency,
+        });
+    }
 }
 
 async function handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {

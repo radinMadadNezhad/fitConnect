@@ -60,12 +60,12 @@ export default function CoachDashboardPage() {
         async function fetchCoachData() {
             try {
                 // Fetch bookings
-                const bookingsRes = await fetch('/api/bookings');
-                // Note: The /api/bookings endpoint needs to support filtering by coach or return all relevant bookings
-                // For now assuming it returns bookings for the current user (if they are a coach)
+                const bookingsRes = await fetch('/api/coach/bookings');
+                // /api/coach/bookings returns bookings where the current user is the coach
+
                 if (bookingsRes.ok) {
                     const data = await bookingsRes.json();
-                    setCoachBookings(data.bookings || []);
+                    setCoachBookings(data.data || []);
                 }
 
                 // Fetch Profile for Coach ID
@@ -121,10 +121,10 @@ export default function CoachDashboardPage() {
 
             toast.success('Booking cancelled');
             // Refresh bookings
-            const bookingsRes = await fetch('/api/bookings');
+            const bookingsRes = await fetch('/api/coach/bookings');
             if (bookingsRes.ok) {
                 const data = await bookingsRes.json();
-                setCoachBookings(data.bookings || []);
+                setCoachBookings(data.data || []);
             }
         } catch (error) {
             toast.error('Could not cancel booking');
@@ -152,10 +152,10 @@ export default function CoachDashboardPage() {
 
             toast.success('Booking rescheduled');
             // Refresh bookings
-            const bookingsRes = await fetch('/api/bookings');
+            const bookingsRes = await fetch('/api/coach/bookings');
             if (bookingsRes.ok) {
                 const data = await bookingsRes.json();
-                setCoachBookings(data.bookings || []);
+                setCoachBookings(data.data || []);
             }
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Could not reschedule booking');

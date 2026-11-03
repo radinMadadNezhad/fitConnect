@@ -24,10 +24,10 @@ export default function CoachBookingsPage() {
     useEffect(() => {
         async function fetchBookings() {
             try {
-                const res = await fetch('/api/bookings');
+                const res = await fetch('/api/coach/bookings');
                 if (res.ok) {
                     const data = await res.json();
-                    setBookings(data.bookings || []);
+                    setBookings(data.data || []);
                 }
             } catch (error) {
                 console.error('Failed to fetch bookings', error);

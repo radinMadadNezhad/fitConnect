@@ -26,8 +26,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Header } from '@/components/layout';
-import { coaches, reviews } from '@/lib/mock-data';
-import { cn, isDemoMode } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 interface CoachProfilePageProps {
     params: Promise<{ id: string }>;
@@ -41,26 +40,20 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
 
     useEffect(() => {
         async function fetchCoach() {
-            if (isDemoMode()) {
-                const found = coaches.find((c) => c.id === id);
-                setCoach(found || null);
-                setIsLoading(false);
-            } else {
-                try {
-                    const res = await fetch(`/api/coaches/${id}`);
-                    if (!res.ok) {
-                        if (res.status === 404) setCoach(null);
-                        else throw new Error('Failed to load coach');
-                    } else {
-                        const data = await res.json();
-                        setCoach(data);
-                    }
-                } catch (err) {
-                    console.error(err);
-                    setError('Failed to load profile');
-                } finally {
-                    setIsLoading(false);
+            try {
+                const res = await fetch(`/api/coaches/${id}`);
+                if (!res.ok) {
+                    if (res.status === 404) setCoach(null);
+                    else throw new Error('Failed to load coach');
+                } else {
+                    const data = await res.json();
+                    setCoach(data);
                 }
+            } catch (err) {
+                console.error(err);
+                setError('Failed to load profile');
+            } finally {
+                setIsLoading(false);
             }
         }
         fetchCoach();
@@ -94,17 +87,14 @@ export default function CoachProfilePage({ params }: CoachProfilePageProps) {
         );
     }
 
-    // Mock reviews for demo, or real reviews if available
-    const coachReviews = isDemoMode()
-        ? reviews.filter((r) => r.coachId === coach.id)
-        : (coach.reviews || []).map((r: any) => ({
-            id: r.id,
-            rating: r.rating,
-            comment: r.text, // API returns 'text', UI expects 'comment'
-            date: new Date(r.createdAt).toLocaleDateString(),
-            clientName: 'Client', // API might not return name for privacy, or we need to fetch it
-            clientAvatar: undefined
-        }));
+    const coachReviews = (coach.reviews || []).map((r: any) => ({
+        id: r.id,
+        rating: r.rating,
+        comment: r.text, // API returns 'text', UI expects 'comment'
+        date: new Date(r.createdAt).toLocaleDateString(),
+        clientName: r.client?.displayName || 'Client',
+        clientAvatar: r.client?.avatar ?? undefined
+    }));
 
     const ratingDistribution = [5, 4, 3, 2, 1].map((rating) => ({
         rating,

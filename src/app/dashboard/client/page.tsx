@@ -21,8 +21,9 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Header } from '@/components/layout';
-import { coaches } from '@/lib/mock-data';
-import { cn, isDemoMode } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { Coach } from '@/lib/types';
+import { fetchCoaches } from '@/lib/coach-adapter';
 import { useAuth } from '@/contexts/auth-context';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -44,13 +45,31 @@ export default function UserDashboardPage() {
     const router = useRouter();
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const savedCoaches = isDemoMode() ? coaches.slice(0, 3) : []; // Keep mock for now as we focus on bookings
+    // Placeholder until favourites are modelled in the database: shows real
+    // coaches so the links resolve, rather than mock ids that 404.
+    const [savedCoaches, setSavedCoaches] = useState<Coach[]>([]);
 
     useEffect(() => {
         if (!isAuthLoading && !user) {
             router.push('/login');
         }
     }, [isAuthLoading, user, router]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        fetchCoaches()
+            .then((list) => {
+                if (!cancelled) setSavedCoaches(list.slice(0, 3));
+            })
+            .catch((err) => {
+                console.error('Failed to load coaches', err);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const fetchBookings = async () => {
         try {
@@ -59,7 +78,7 @@ export default function UserDashboardPage() {
                 const data = await res.json();
                 // Map API data to UI model if necessary, for now assuming match or simple transform
                 // verified API logic returns standard Booking model, we might need to adapt
-                setBookings(data.bookings || []);
+                setBookings(data.data || []);
             }
         } catch (error) {
             console.error('Failed to fetch bookings', error);
@@ -79,8 +98,8 @@ export default function UserDashboardPage() {
         if (!confirm('Are you sure you want to cancel this session?')) return;
 
         try {
-            const res = await fetch(`/api/bookings/${bookingId}`, {
-                method: 'DELETE',
+            const res = await fetch(`/api/bookings/${bookingId}/cancel`, {
+                method: 'POST',
             });
 
             if (res.ok) {

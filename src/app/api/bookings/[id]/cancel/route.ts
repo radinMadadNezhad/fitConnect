@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { requireAuth, AuthUser } from '@/lib/auth';
 import { canCancelBooking } from '@/lib/permissions';
 import { refundPayment } from '@/lib/stripe';
+import { sendBookingCancelled } from '@/lib/email';
 import { cancelBookingSchema } from '@/lib/validators';
 
 // Status constants (match Prisma schema enums)
@@ -32,8 +33,14 @@ export async function POST(req: NextRequest, { params }: Params) {
             where: { id },
             include: {
                 coach: {
-                    select: { userId: true },
+                    select: {
+                        userId: true,
+                        displayName: true,
+                        user: { select: { email: true } },
+                    },
                 },
+                client: { select: { email: true, displayName: true } },
+                package: { select: { title: true } },
                 payment: true,
             },
         });
@@ -100,6 +107,27 @@ export async function POST(req: NextRequest, { params }: Params) {
                 data: { status: PaymentStatusRefunded },
             });
         }
+
+        // Notify both parties. sendEmail never throws, so this cannot turn a
+        // completed cancellation into a failed request.
+        await sendBookingCancelled({
+            bookingId: booking.id,
+            clientEmail: booking.client.email,
+            clientName: booking.client.displayName || booking.client.email.split('@')[0],
+            coachEmail: booking.coach.user.email,
+            coachName: booking.coach.displayName,
+            packageTitle: booking.package.title,
+            startTime: booking.startTime,
+            amountCents: booking.amountCents,
+            currency: booking.currency,
+            refunded: refundIssued,
+            cancelledByRole:
+                user.role === 'ADMIN'
+                    ? 'admin'
+                    : booking.clientId === user.userId
+                        ? 'client'
+                        : 'coach',
+        });
 
         return NextResponse.json({
             message: refundIssued ? 'Booking cancelled and refunded' : 'Booking cancelled',

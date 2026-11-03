@@ -48,6 +48,7 @@ async function main() {
         data: {
             email: 'admin@fitconnect.com',
             passwordHash,
+            displayName: 'FitConnect Admin',
             role: UserRole.ADMIN,
         },
     });
@@ -59,6 +60,7 @@ async function main() {
             data: {
                 email: 'alex@example.com',
                 passwordHash,
+                displayName: 'Alex Rivera',
                 role: UserRole.CLIENT,
             },
         }),
@@ -66,6 +68,7 @@ async function main() {
             data: {
                 email: 'jordan@example.com',
                 passwordHash,
+                displayName: 'Jordan Blake',
                 role: UserRole.CLIENT,
             },
         }),
@@ -73,6 +76,7 @@ async function main() {
             data: {
                 email: 'sam@example.com',
                 passwordHash,
+                displayName: 'Sam Patel',
                 role: UserRole.CLIENT,
             },
         }),
@@ -192,6 +196,9 @@ async function main() {
             data: {
                 email: data.email,
                 passwordHash,
+                // Mirror the profile name onto the account so anything reading
+                // User.displayName (e.g. /api/auth/me) shows a real name too.
+                displayName: data.profile.displayName,
                 role: UserRole.COACH,
             },
         });

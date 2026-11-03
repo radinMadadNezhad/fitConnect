@@ -75,6 +75,9 @@ export async function GET(req: NextRequest) {
                         select: {
                             id: true,
                             email: true,
+                            // The coach bookings UI renders these two
+                            displayName: true,
+                            avatar: true,
                         },
                     },
                     payment: {

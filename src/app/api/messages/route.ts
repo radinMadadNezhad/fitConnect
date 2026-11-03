@@ -24,10 +24,16 @@ export async function GET(req: NextRequest) {
             },
             include: {
                 coach: {
-                    select: { displayName: true, avatar: true }
+                    select: {
+                        displayName: true,
+                        avatar: true,
+                        email: true,
+                        // A coach's public name lives on CoachProfile, not User
+                        coachProfile: { select: { displayName: true } }
+                    }
                 },
                 client: {
-                    select: { displayName: true, avatar: true }
+                    select: { displayName: true, avatar: true, email: true }
                 },
                 messages: {
                     orderBy: { createdAt: 'desc' },
@@ -43,9 +49,17 @@ export async function GET(req: NextRequest) {
             const otherUser = isCoach ? thread.client : thread.coach;
             const lastMessage = thread.messages[0];
 
+            // Prefer the coach's profile name, then the account name, then the
+            // email local-part, so a thread never renders as "Unknown User".
+            const otherName = isCoach
+                ? thread.client.displayName || thread.client.email.split('@')[0]
+                : thread.coach.coachProfile?.displayName ||
+                  thread.coach.displayName ||
+                  thread.coach.email.split('@')[0];
+
             return {
                 id: thread.id,
-                name: otherUser.displayName || 'Unknown User',
+                name: otherName || 'Unknown User',
                 avatar: otherUser.avatar,
                 lastMessage: lastMessage?.content || 'No messages yet',
                 time: lastMessage?.createdAt.toISOString() || thread.createdAt.toISOString(),
@@ -77,7 +91,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Content is required' }, { status: 400 });
         }
 
-        let targetThreadId = threadId;
+        const targetThreadId = threadId;
 
         // If no threadId, find or create one based on recipient
         if (!targetThreadId && recipientId) {
@@ -92,6 +106,20 @@ export async function POST(req: NextRequest) {
             // NOTE: In a real app, we need to know valid roles. 
             // Let's rely on threadId being passed for existing chats.
             return NextResponse.json({ error: 'Thread ID required for now' }, { status: 400 });
+        }
+
+        // Only a participant of the thread may post into it
+        const thread = await prisma.chatThread.findUnique({
+            where: { id: targetThreadId },
+            select: { coachId: true, clientId: true }
+        });
+
+        if (!thread) {
+            return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+        }
+
+        if (thread.coachId !== user.userId && thread.clientId !== user.userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
         const message = await prisma.message.create({
